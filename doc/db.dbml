@@ -1,0 +1,84 @@
+Table movies {
+id uuid [pk, default: `gen_random_uuid()`]
+title varchar(255) [not null]
+description text
+duration int [not null, note: 'Duration in minutes']
+release_date date [not null]
+created_at timestamptz [not null, default: `now()`]
+updated_at timestamptz [not null, default: `now()`]
+deleted_at timestamptz [note: 'Soft delete']
+}
+
+Table showtimes {
+id uuid [pk, default: `gen_random_uuid()`]
+movie_id uuid [not null, ref: > movies.id]
+start_time timestamptz [not null]
+end_time timestamptz [not null]
+total_seats int [not null]
+booked_seats int [not null, default: 0]
+created_at timestamptz [not null, default: `now()`]
+updated_at timestamptz [not null, default: `now()`]
+deleted_at timestamptz [note: 'Soft delete']
+
+indexes {
+(movie_id, start_time) [name: 'idx_showtimes_movie_start']
+}
+}
+
+// Pre-define seats per showtime
+// ป้องกัน seat_number ที่ไม่มีอยู่จริงถูก reserve
+Table seats {
+id uuid [pk, default: `gen_random_uuid()`]
+showtime_id uuid [not null, ref: > showtimes.id]
+seat_number varchar(10) [not null, note: 'e.g. A1, B12']
+created_at timestamptz [not null, default: `now()`]
+
+indexes {
+(showtime_id, seat_number) [unique, name: 'uq_seats_showtime_seat']
+}
+}
+
+Table reservations {
+id uuid [pk, default: `gen_random_uuid()`]
+showtime_id uuid [not null, ref: > showtimes.id]
+seat_id uuid [not null, ref: > seats.id]
+// customer_id uuid [ref: > customers.id, note: 'Optional for MVP']
+// customer_name varchar(255) [note: 'Fallback if no customer account']
+status reservation_status [not null, default: 'confirmed']
+reserved_at timestamptz [not null, default: `now()`]
+created_at timestamptz [not null, default: `now()`]
+updated_at timestamptz [not null, default: `now()`]
+
+indexes {
+(showtime_id, seat_id) [unique, name: 'uq_reservations_showtime_seat']
+// customer_id [name: 'idx_reservations_customer']
+}
+}
+
+// ----------------------------
+// Redis fallback / audit
+// ----------------------------
+// เก็บ log ตอน Redis lock ถูกใช้งาน
+// ช่วย debug และ audit กรณี lock contention
+Table reservation_lock_logs {
+id uuid [pk, default: `gen_random_uuid()`]
+showtime_id uuid [not null]
+seat_number varchar(10) [not null]
+lock_key varchar(255) [not null, note: 'Redis key e.g. lock:showtime:{id}:seat:{num}']
+status lock_status [not null, note: 'acquired | failed | released']
+acquired_at timestamptz
+released_at timestamptz
+created_at timestamptz [not null, default: `now()`]
+}
+
+Enum reservation_status {
+confirmed
+cancelled
+expired [note: 'Future use: hold timeout']
+}
+
+Enum lock_status {
+acquired
+failed
+released
+}
