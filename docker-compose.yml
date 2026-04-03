@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${APP_CONTAINER_NAME}
+    ports:
+      - "${APP_EXTERNAL_PORT}:${APP_INTERNAL_PORT}"
+    env_file:
+      - .env
+    environment:
+      APP_PORT: ${APP_INTERNAL_PORT}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  db:
+    image: postgres:16
+    container_name: ${DB_CONTAINER_NAME}
+    ports:
+      - "${DB_EXTERNAL_PORT}:5432"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: ${REDIS_CONTAINER_NAME}
+    ports:
+      - "${REDIS_EXTERNAL_PORT}:6379"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
