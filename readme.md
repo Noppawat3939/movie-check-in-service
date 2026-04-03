@@ -129,10 +129,12 @@ root/
 │
 ├── internal/
 │   │
-│   ├── usecase/                           # Application Business
+│   ├── domain/                            # Entity
+│   │
+│   ├── usecase/                           # Business
 │   │   ├── movie_usecase.go               # interface + logic
 │   │   ├── showtime_usecase.go
-│   │   └── reservation_usecase.go         # core: lock → tx → insert
+│   │   └── reservation_usecase.go
 │   │
 │   ├── infrastructure/
 │   │   ├── postgres/
