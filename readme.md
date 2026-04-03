@@ -122,49 +122,50 @@ The focus of this project is:
 ### Project structure
 
 ```
-movie-checkin-service/
+root/
 ├── cmd/
-│ └── api/
-│ └── main.go # entrypoint, wire everything together
+│   └── api/
+│       └── main.go                        # entrypoint, wire everything together
 │
 ├── internal/
-│ │
-│ │ ├── movie_usecase.go # interface + logic
-│ │ ├── showtime_usecase.go
-│ │ └── reservation_usecase.go # core: lock → tx → insert
-│ │
-│ ├── infrastructure/
-│ │ ├── postgres/
-│ │ │ ├── db.go # db connection
-│ │ │ ├── movie_repo.go
-│ │ │ ├── showtime_repo.go
-│ │ │ ├── seat_repo.go
-│ │ │ └── reservation_repo.go
-│ │ └── redis/
-│ │ ├── client.go # redis connection
-│ │ └── lock.go # SETNX / DEL distributed lock
-│ │
-│ └── delivery/
-│ └── http/
-│ ├── router.go # register all routes
-│ ├── middleware/
-│ │ └── error_handler.go # central error → HTTP response
-│ └── handler/
-│ ├── movie_handler.go
-│ ├── showtime_handler.go
-│ └── reservation_handler.go
+│   │
+│   ├── usecase/                           # Application Business
+│   │   ├── movie_usecase.go               # interface + logic
+│   │   ├── showtime_usecase.go
+│   │   └── reservation_usecase.go         # core: lock → tx → insert
+│   │
+│   ├── infrastructure/
+│   │   ├── postgres/
+│   │   │   ├── db.go                      # init connection pool
+│   │   │   ├── movie_repo.go
+│   │   │   ├── showtime_repo.go
+│   │   │   ├── seat_repo.go
+│   │   │   └── reservation_repo.go
+│   │   └── redis/
+│   │       ├── client.go                  # init Redis client
+│   │       └── lock.go                    # SETNX / DEL distributed lock
+│   │
+│   └── delivery/
+│       └── http/
+│           ├── router.go                  # register all routes
+│           ├── middleware/
+│           │   └── error_handler.go       # central error → HTTP response
+│           └── handler/
+│               ├── movie_handler.go
+│               ├── showtime_handler.go
+│               └── reservation_handler.go
 │
 ├── migrations/
-│ ├── 000001_create_movies.up.sql
-│ ├── 000001_create_movies.down.sql
-│ ├── 000002_create_showtimes.up.sql
-│ ├── 000002_create_showtimes.down.sql
-│ ├── 000003_create_seats.up.sql
-│ ├── 000003_create_seats.down.sql
-│ ├── 000004_create_reservations.up.sql
-│ └── 000004_create_reservations.down.sql
+│   ├── 000001_create_movies.up.sql
+│   ├── 000001_create_movies.down.sql
+│   ├── 000002_create_showtimes.up.sql
+│   ├── 000002_create_showtimes.down.sql
+│   ├── 000003_create_seats.up.sql
+│   ├── 000003_create_seats.down.sql
+│   ├── 000004_create_reservations.up.sql
+│   └── 000004_create_reservations.down.sql
 │
-├── docker-compose.yml # app + postgres + redis
+├── docker-compose.yml                     # app + postgres + redis
 ├── Dockerfile
 ├── .env.example
 ├── Makefile
