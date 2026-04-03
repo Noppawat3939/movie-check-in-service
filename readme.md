@@ -121,6 +121,7 @@ The focus of this project is:
 
 ### Project structure
 
+```
 movie-checkin-service/
 ├── cmd/
 │ └── api/
@@ -168,3 +169,4 @@ movie-checkin-service/
 ├── .env.example
 ├── Makefile
 └── go.mod
+```
