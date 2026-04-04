@@ -3,6 +3,7 @@ package http
 import (
 	"check-in/internal/delivery/http/handler"
 	"check-in/internal/infra/postgresl"
+	"check-in/internal/infra/redis"
 	"check-in/internal/usecase"
 	"net/http"
 	"time"
@@ -14,8 +15,10 @@ import (
 func NewRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 
+	client, _ := redis.NewClient()
+	lockRepo := redis.NewLockRepository(client)
 	reservationRepo := postgresl.NewReversationRepository(db)
-	reservationUsecase := usecase.NewReverationUsecase(reservationRepo)
+	reservationUsecase := usecase.NewReservationUsecase(reservationRepo, *lockRepo)
 	reservationHandler := handler.NewReservationHandler(reservationUsecase)
 
 	// health

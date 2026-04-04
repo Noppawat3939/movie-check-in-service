@@ -11,10 +11,10 @@ import (
 )
 
 type ReservationHandler struct {
-	reservationUsecase usecase.ReverationUsecase
+	reservationUsecase usecase.ReservationUsecase
 }
 
-func NewReservationHandler(usecase usecase.ReverationUsecase) *ReservationHandler {
+func NewReservationHandler(usecase usecase.ReservationUsecase) *ReservationHandler {
 	return &ReservationHandler{usecase}
 }
 
@@ -26,7 +26,7 @@ func (h *ReservationHandler) CreateReservation(c *gin.Context) {
 		return
 	}
 
-	data, err := h.reservationUsecase.CreateReveration(c, req)
+	data, err := h.reservationUsecase.CreateReservation(c, req)
 
 	if err != nil {
 		statusCode := http.StatusInternalServerError
