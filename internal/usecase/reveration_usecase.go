@@ -4,7 +4,6 @@ import (
 	"check-in/internal/domain"
 	"check-in/internal/infra/postgresl"
 	"context"
-	"errors"
 	"fmt"
 	"time"
 )
@@ -28,7 +27,7 @@ func (u *reverationUsecase) CreateReveration(ctx context.Context, req domain.Cre
 	}
 	fmt.Printf("count %d", count)
 	if count > 0 {
-		return nil, errors.New("seat already reserved")
+		return nil, domain.ErrSeatAlreadyReserved
 	}
 
 	reservation := &domain.Reservation{

@@ -29,3 +29,6 @@ migrate-down-one:
 
 migrate-version:
 	migrate -path $(MIGRATION_PATH) -database "$(DB_URL)" version
+
+seed:
+	docker exec -i $(DB_CONTAINER_NAME) psql -U $(DB_USER) -d $(DB_NAME) < migrations/seeds/seed.sql

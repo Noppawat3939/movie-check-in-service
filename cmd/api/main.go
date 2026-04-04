@@ -1,6 +1,7 @@
 package main
 
 import (
+	httpDelivery "check-in/internal/delivery/http"
 	"check-in/internal/infra/postgresl"
 	"check-in/internal/infra/redis"
 	"fmt"
@@ -30,9 +31,12 @@ func main() {
 
 	port := os.Getenv("APP_INTERNAL_PORT")
 
+	router := httpDelivery.NewRouter(db)
+
 	// start server
 	srv := &http.Server{
 		Addr:         ":" + port,
+		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  30 * time.Second,

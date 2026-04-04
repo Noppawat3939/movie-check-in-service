@@ -158,6 +158,8 @@ root/
 │               └── reservation_handler.go
 │
 ├── migrations/
+    └── seeds/
+        └── seed.sql                       # initial data
 │   ├── 000001_create_movies.up.sql
 │   ├── 000001_create_movies.down.sql
 │   ├── 000002_create_showtimes.up.sql
