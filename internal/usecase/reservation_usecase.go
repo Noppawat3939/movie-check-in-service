@@ -13,6 +13,7 @@ import (
 
 type ReservationUsecase interface {
 	CreateReservation(ctx context.Context, req domain.CreateReservationRequest) (*domain.CreateReservationResponse, error)
+	ListReservation(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error)
 }
 
 type reservationUsecase struct {
@@ -68,4 +69,8 @@ func (u *reservationUsecase) CreateReservation(ctx context.Context, req domain.C
 	}
 
 	return resp, nil
+}
+
+func (u *reservationUsecase) ListReservation(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error) {
+	return u.reservationRepo.ListReservationByShowtimeID(ctx, showtimeID)
 }

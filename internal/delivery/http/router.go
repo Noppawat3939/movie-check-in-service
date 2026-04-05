@@ -41,6 +41,7 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	{
 		// reservations
 		api.POST("/reservation", reservationHandler.CreateReservation)
+		api.GET("/reservation/:showtimeID", reservationHandler.ListReservation)
 
 		// movies
 		api.GET("/movies", movieHandler.FindAllMovies)

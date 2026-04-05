@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type ReservationHandler struct {
@@ -36,6 +37,22 @@ func (h *ReservationHandler) CreateReservation(c *gin.Context) {
 		}
 
 		response.Error(c, statusCode, err.Error(), req)
+		return
+	}
+
+	response.Success(c, data)
+}
+
+func (h *ReservationHandler) ListReservation(c *gin.Context) {
+	showtimeID, err := uuid.Parse(c.Param("showtimeID"))
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid id format")
+		return
+	}
+
+	data, err := h.reservationUsecase.ListReservation(c, showtimeID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 type ReservationRepository interface {
 	Create(ctx context.Context, data *domain.Reservation) error
 	CountByShowTimeAndSeat(ctx context.Context, showtimeID uuid.UUID, seatID uuid.UUID) (int64, error)
+	ListReservationByShowtimeID(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error)
 }
 
 type reservationRepository struct {
@@ -42,4 +43,14 @@ func (r *reservationRepository) CountByShowTimeAndSeat(ctx context.Context,
 	}
 
 	return count, nil
+}
+
+func (r *reservationRepository) ListReservationByShowtimeID(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error) {
+	var data []domain.Reservation
+
+	if err := r.db.WithContext(ctx).Where("showtime_id = ?", showtimeID).Find(&data).Error; err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
