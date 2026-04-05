@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type ReservationUsecase interface {
@@ -46,6 +48,7 @@ func (u *reservationUsecase) CreateReservation(ctx context.Context, req domain.C
 	}
 
 	reservation := &domain.Reservation{
+		ID:         uuid.New(),
 		ShowTimeID: req.ShowTimeID,
 		SeatID:     req.SeatID,
 		Status:     domain.ReservationConfirmed,

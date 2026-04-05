@@ -15,10 +15,10 @@ const (
 )
 
 type Reservation struct {
-	ID         uuid.UUID         `json:"id" gorm:"column:id"`
+	ID         uuid.UUID         `json:"id" gorm:"column:id;type:uuid;primaryKey;default:gen_random_uuid()"`
 	ShowTimeID uuid.UUID         `json:"showtime_id" gorm:"column:showtime_id"`
 	SeatID     uuid.UUID         `json:"seat_id" gorm:"column:seat_id"`
-	Status     ReservationStatus `json:"status" gorm:"column:status"`
+	Status     ReservationStatus `json:"status" gorm:"column:status;type:reservation_status"`
 	ReservedAt time.Time         `json:"reserved_at" gorm:"column:reserved_at"`
 	CreatedAt  time.Time         `json:"created_at" gorm:"column:created_at"`
 	UpdatedAt  time.Time         `json:"updated_at" gorm:"column:updated_at"`
