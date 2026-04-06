@@ -14,7 +14,7 @@ type Client struct {
 }
 
 func NewClient() (*Client, error) {
-	host := os.Getenv("REIDS_HOST")
+	host := os.Getenv("REDIS_HOST")
 	port := os.Getenv("REDIS_EXTERNAL_PORT")
 
 	client := goredis.NewClient(&goredis.Options{

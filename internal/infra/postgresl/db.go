@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -23,7 +22,6 @@ type Config struct {
 }
 
 func NewDB() (*gorm.DB, error) {
-	loadEnv()
 
 	dsn := buildDSN(Config{
 		Host:     os.Getenv("DB_HOST"),
@@ -82,10 +80,4 @@ func buildDSN(cfg Config) string {
 		cfg.Name,
 		cfg.Port,
 		cfg.SSLMode)
-}
-
-func loadEnv() {
-	if err := godotenv.Load(); err != nil {
-		fmt.Println("failed load env %w:", err)
-	}
 }

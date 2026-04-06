@@ -11,9 +11,14 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// load env
+	loadEnv()
+
 	// initialize database
 	db, err := postgresl.NewDB()
 	if err != nil {
@@ -69,4 +74,10 @@ func waitForShutdown(server *http.Server) {
 	}
 
 	log.Println("server stopped")
+}
+
+func loadEnv() {
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("failed load env %w:", err)
+	}
 }
