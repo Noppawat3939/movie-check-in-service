@@ -69,6 +69,7 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 	cleanupReservationData(t, db, showtimeID, seatID)
 
 	req := domain.CreateReservationRequest{ShowTimeID: showtimeID, SeatID: seatID}
+	ctx := context.Background()
 
 	const numGoroutines = 100_000 // mock 100k request trying reserve movie
 
@@ -83,7 +84,7 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 		go func(userNum int) {
 			defer wg.Done()
 
-			_, err := uc.CreateReservation(context.Background(), req)
+			_, err := uc.CreateReservation(ctx, req)
 			if err == nil {
 				successCount.Add(1)
 			} else {
@@ -97,7 +98,7 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 	assert.Equal(t, int32(1), successCount.Load())
 	assert.Equal(t, int32(numGoroutines-1), failedCount.Load())
 
-	count, err := reservationRepo.CountByShowTimeAndSeat(context.Background(), showtimeID, seatID)
+	count, err := reservationRepo.CountByShowTimeAndSeat(ctx, showtimeID, seatID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
