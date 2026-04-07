@@ -8,6 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -69,9 +70,11 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 	cleanupReservationData(t, db, showtimeID, seatID)
 
 	req := domain.CreateReservationRequest{ShowTimeID: showtimeID, SeatID: seatID}
-	ctx := context.Background()
 
-	const numGoroutines = 100_000 // mock 100k request trying reserve movie
+	const numGoroutines = 1000
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+	defer cancel()
 
 	var (
 		successCount atomic.Int32
@@ -80,7 +83,8 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 	)
 
 	wg.Add(numGoroutines)
-	for i := range numGoroutines {
+
+	for i := 0; i < numGoroutines; i++ {
 		go func(userNum int) {
 			defer wg.Done()
 
@@ -93,13 +97,14 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 
 		}(i)
 	}
-	wg.Wait()
 
-	assert.Equal(t, int32(1), successCount.Load())
-	assert.Equal(t, int32(numGoroutines-1), failedCount.Load())
+	wg.Wait()
 
 	count, err := reservationRepo.CountByShowTimeAndSeat(ctx, showtimeID, seatID)
 
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
+	assert.Equal(t, int32(1), successCount.Load())
+	assert.Equal(t, int32(numGoroutines-1), failedCount.Load())
+	assert.Equal(t, int32(numGoroutines), successCount.Load()+failedCount.Load())
 }

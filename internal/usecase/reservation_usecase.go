@@ -28,7 +28,8 @@ func NewReservationUsecase(reservationRepo postgresl.ReservationRepository, lock
 func (u *reservationUsecase) CreateReservation(ctx context.Context, req domain.CreateReservationRequest) (*domain.CreateReservationResponse, error) {
 	// prevent concurrency requests to reserve same showtime and seat
 	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s", req.ShowTimeID, req.SeatID)
-	acquired, err := u.lockRepo.AcquireLock(ctx, lockKey, 10*time.Second)
+	lockValue := uuid.NewString()
+	acquired, err := u.lockRepo.AcquireLock(ctx, lockKey, lockValue, 10*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +37,7 @@ func (u *reservationUsecase) CreateReservation(ctx context.Context, req domain.C
 		return nil, domain.ErrLockNotAquired
 	}
 	// clear lock
-	defer u.lockRepo.ReleaseLock(ctx, lockKey)
+	defer u.lockRepo.ReleaseLock(ctx, lockKey, lockValue)
 
 	// ensure has 1 request below processes
 	count, err := u.reservationRepo.CountByShowTimeAndSeat(ctx, req.ShowTimeID, req.SeatID)
