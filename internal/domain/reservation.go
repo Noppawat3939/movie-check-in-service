@@ -36,3 +36,8 @@ type CreateReservationResponse struct {
 	Status     ReservationStatus `json:"status"`
 	ReservedAt time.Time         `json:"reserved_at"`
 }
+
+type ChangeReservationRequest struct {
+	ReservationID uuid.UUID `json:"-"`
+	NewSeatID     uuid.UUID `json:"new_seat_id" binding:"required"`
+}
