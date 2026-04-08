@@ -17,7 +17,7 @@ func NewLockRepository(client *Client) *LockRepository {
 }
 
 func (r *LockRepository) AcquireLock(ctx context.Context, key string, value string, ttl time.Duration) (bool, error) {
-	result, err := r.client.Conn.SetArgs(ctx, key, value, redis.SetArgs{Mode: "NX", TTL: ttl}).Result()
+	result, err := r.client.Conn.SetArgs(ctx, key, value, redis.SetArgs{Mode: "NX", TTL: ttl}).Result() // set value when key dosen't exits
 
 	if err != nil {
 		return false, fmt.Errorf("acquire lock failed %w", err)
