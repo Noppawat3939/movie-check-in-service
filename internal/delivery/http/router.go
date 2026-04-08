@@ -26,6 +26,10 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	movieUsecase := usecase.NewMovieUsecase(movieRepo, cache)
 	movieHandler := handler.NewMovieHandler(movieUsecase)
 
+	seatRepo := postgresl.NewSeatRepository(db)
+	seatUsecase := usecase.NewSeatUsecase(seatRepo, reservationRepo, cache)
+	seatHandler := handler.NewSeatHandler(seatUsecase)
+
 	// health
 	r.GET("/health", func(c *gin.Context) {
 		data := map[string]interface{}{
@@ -46,6 +50,9 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 
 		// movies
 		api.GET("/movies", movieHandler.FindAllMovies)
+
+		// showtimes
+		api.GET("/showtime/:showtimeID/seats", seatHandler.FindAllSeatAvailable)
 	}
 
 	return r
