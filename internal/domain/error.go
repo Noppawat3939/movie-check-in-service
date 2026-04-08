@@ -8,6 +8,7 @@ const (
 	ErrLockNotAquiredMsg         = "seat is being processed, please try again"
 	ErrReservationNotFoundMsg    = "reservatoin not found"
 	ErrReservationNotEligibleMsg = "reservation cannot be changed"
+	ErrMovieNotFoundMsg          = "movie not found"
 )
 
 var (
@@ -15,4 +16,5 @@ var (
 	ErrLockNotAquired         = errors.New(ErrLockNotAquiredMsg)
 	ErrReservationNotEligible = errors.New(ErrReservationNotEligibleMsg)
 	ErrReservationNotFound    = errors.New(ErrReservationNotFoundMsg)
+	ErrMovieNotFound          = errors.New(ErrMovieNotFoundMsg)
 )

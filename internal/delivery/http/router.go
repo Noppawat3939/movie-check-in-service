@@ -50,6 +50,7 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 
 		// movies
 		api.GET("/movies", movieHandler.FindAllMovies)
+		api.GET("/movies/:id", movieHandler.FindByID)
 
 		// showtimes
 		api.GET("/showtime/:showtimeID/seats", seatHandler.FindAllSeatAvailable)
