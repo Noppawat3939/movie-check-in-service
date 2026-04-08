@@ -83,9 +83,13 @@ func (h *ReservationHandler) ChangeReservation(c *gin.Context) {
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 
+		if errors.Is(err, domain.ErrReservationNotFound) {
+			statusCode = http.StatusNotFound
+		}
 		if errors.Is(err, domain.ErrReservationNotEligible) {
 			statusCode = http.StatusConflict
 		}
+
 		response.Error(c, statusCode, err.Error(), req)
 		return
 	}

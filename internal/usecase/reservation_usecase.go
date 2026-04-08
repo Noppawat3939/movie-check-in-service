@@ -28,8 +28,7 @@ func NewReservationUsecase(reservationRepo postgresl.ReservationRepository, lock
 
 func (u *reservationUsecase) CreateReservation(ctx context.Context, req domain.CreateReservationRequest) (*domain.CreateReservationResponse, error) {
 	// prevent concurrency requests to reserve same showtime and seat
-	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s", req.ShowTimeID, req.SeatID)
-	lockValue := uuid.NewString()
+	lockKey, lockValue := buildLockArgs(req.ShowTimeID, req.SeatID)
 	acquired, err := u.lockRepo.AcquireLock(ctx, lockKey, lockValue, 10*time.Second)
 	if err != nil {
 		return nil, err
@@ -81,15 +80,14 @@ func (u *reservationUsecase) ChangeReservation(ctx context.Context, req domain.C
 	// check current reseved
 	existing, err := u.reservationRepo.FindByID(ctx, req.ReservationID)
 	if err != nil {
-		return nil, err
+		return nil, domain.ErrReservationNotFound
 	}
 	if existing.Status != domain.ReservationConfirmed {
 		return nil, domain.ErrReservationNotEligible
 	}
 
 	// lock new seat
-	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s", existing.ShowTimeID, req.NewSeatID)
-	lockValue := uuid.NewString()
+	lockKey, lockValue := buildLockArgs(existing.ShowTimeID, req.NewSeatID)
 	acquired, err := u.lockRepo.AcquireLock(ctx, lockKey, lockValue, 10*time.Second)
 	if err != nil {
 		return nil, err
@@ -131,4 +129,10 @@ func (u *reservationUsecase) ChangeReservation(ctx context.Context, req domain.C
 	}
 
 	return resp, nil
+}
+
+func buildLockArgs(showtimeID uuid.UUID, seatID uuid.UUID) (string, string) {
+	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s:", showtimeID, seatID)
+	lockValue := uuid.NewString()
+	return lockKey, lockValue
 }
