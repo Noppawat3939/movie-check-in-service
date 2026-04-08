@@ -49,10 +49,9 @@ reserved_at timestamptz [not null, default: `now()`]
 created_at timestamptz [not null, default: `now()`]
 updated_at timestamptz [not null, default: `now()`]
 
-indexes {
-(showtime_id, seat_id) [unique, name: 'uq_reservations_showtime_seat']
-// customer_id [name: 'idx_reservations_customer']
-}
+ indexes {
+    (showtime_id, status) [name: 'idx_reservations_showtime_status']
+  }
 }
 
 // ----------------------------
