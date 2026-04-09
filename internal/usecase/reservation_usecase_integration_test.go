@@ -118,8 +118,8 @@ func TestChangeReservation_Success(t *testing.T) {
 	reservationRepo := postgresl.NewReversationRepository(db)
 	lockRepo := redis.NewLockRepository(client)
 
-	uc := NewReservationUsecase(reservationRepo, *lockRepo)
 	ctx := context.Background()
+	uc := NewReservationUsecase(reservationRepo, *lockRepo)
 	showtimeID, _ := uuid.Parse("b1000000-0000-0000-0000-000000000001")
 	oldSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000002")
 	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003")
@@ -163,4 +163,80 @@ func TestChangeReservation_Success(t *testing.T) {
 	count, err := reservationRepo.CountByShowTimeAndSeat(ctx, showtimeID, newSeatID)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), count)
+}
+
+func TestChangeReservation_NewSeatAlreadyReserved(t *testing.T) {
+	setupTestEnv(t)
+
+	db := setupTestDB(t)
+	client := setupTestRedis(t)
+
+	reservationRepo := postgresl.NewReversationRepository(db)
+	lockRepo := redis.NewLockRepository(client)
+
+	ctx := context.Background()
+	uc := NewReservationUsecase(reservationRepo, *lockRepo)
+	showtimeID, _ := uuid.Parse("b1000000-0000-0000-0000-000000000001")
+	oldSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000002")
+	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003")
+
+	// clean up
+	db.Exec("DELETE FROM reservations WHERE showtime_id = ?", showtimeID)
+
+	// create 2 reserve (old A and old B , then change new seat same seat with old B)
+	oldA := &domain.Reservation{
+		ID:         uuid.New(),
+		ShowTimeID: showtimeID,
+		SeatID:     oldSeatID,
+		Status:     domain.ReservationConfirmed,
+		ReservedAt: time.Now(),
+	}
+
+	oldB := &domain.Reservation{
+		ID:         uuid.New(),
+		ShowTimeID: showtimeID,
+		SeatID:     newSeatID, // same with new seat
+		Status:     domain.ReservationConfirmed,
+		ReservedAt: time.Now(),
+	}
+
+	assert.NoError(t, reservationRepo.Create(ctx, oldA), oldA)
+	assert.NoError(t, reservationRepo.Create(ctx, oldB), oldB)
+
+	// make request for change reservation (change seat from oldA to new A but seat new A is reserved by old B)
+	req := domain.ChangeReservationRequest{
+		NewSeatID:     newSeatID,
+		ReservationID: oldA.ID,
+	}
+
+	resp, err := uc.ChangeReservation(ctx, req)
+	assert.NotNil(t, err)
+	assert.ErrorIs(t, err, domain.ErrSeatAlreadyReserved)
+	assert.Nil(t, resp)
+}
+
+func TestChangeReservation_ReservationNotFound(t *testing.T) {
+	setupTestEnv(t)
+
+	db := setupTestDB(t)
+	client := setupTestRedis(t)
+
+	reservationRepo := postgresl.NewReversationRepository(db)
+	lockRepo := redis.NewLockRepository(client)
+
+	ctx := context.Background()
+	uc := NewReservationUsecase(reservationRepo, *lockRepo)
+	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003") // seat existing
+	newReserveID := uuid.New()
+
+	// make request for change reservation (reservation id not found in db)
+	req := domain.ChangeReservationRequest{
+		ReservationID: newReserveID,
+		NewSeatID:     newSeatID,
+	}
+
+	resp, err := uc.ChangeReservation(ctx, req)
+	assert.NotNil(t, err)
+	assert.ErrorIs(t, err, domain.ErrReservationNotFound)
+	assert.Nil(t, resp)
 }
