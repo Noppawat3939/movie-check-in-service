@@ -84,7 +84,7 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 
 	wg.Add(numGoroutines)
 
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(userNum int) {
 			defer wg.Done()
 
