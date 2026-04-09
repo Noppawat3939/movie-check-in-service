@@ -108,3 +108,59 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 	assert.Equal(t, int32(numGoroutines-1), failedCount.Load())
 	assert.Equal(t, int32(numGoroutines), successCount.Load()+failedCount.Load())
 }
+
+func TestChangeReservation_Success(t *testing.T) {
+	setupTestEnv(t)
+
+	db := setupTestDB(t)
+	client := setupTestRedis(t)
+
+	reservationRepo := postgresl.NewReversationRepository(db)
+	lockRepo := redis.NewLockRepository(client)
+
+	uc := NewReservationUsecase(reservationRepo, *lockRepo)
+	ctx := context.Background()
+	showtimeID, _ := uuid.Parse("b1000000-0000-0000-0000-000000000001")
+	oldSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000002")
+	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003")
+
+	// cleanup data
+	db.Exec("DELETE FROM reservations WHERE showtime_id = ?", showtimeID)
+
+	// create existing reservation
+	oldReserve := &domain.Reservation{
+		ID:         uuid.New(),
+		ShowTimeID: showtimeID,
+		SeatID:     oldSeatID,
+		Status:     domain.ReservationConfirmed,
+		ReservedAt: time.Now(),
+	}
+
+	err := reservationRepo.Create(ctx, oldReserve)
+	assert.NoError(t, err)
+
+	// make request for change reservation
+	req := domain.ChangeReservationRequest{
+		ReservationID: oldReserve.ID,
+		NewSeatID:     newSeatID,
+	}
+
+	resp, err := uc.ChangeReservation(ctx, req)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	// check response data
+	assert.Equal(t, showtimeID, resp.ShowtimeID)
+	assert.Equal(t, newSeatID, resp.SeatID)
+	assert.Equal(t, domain.ReservationConfirmed, resp.Status)
+
+	// verify old reservation cancelled
+	oldData, err := reservationRepo.FindByID(ctx, oldReserve.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, domain.ReservationCancelled, oldData.Status)
+
+	// verify new reservation exists (expected count = 1)
+	count, err := reservationRepo.CountByShowTimeAndSeat(ctx, showtimeID, newSeatID)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+}
