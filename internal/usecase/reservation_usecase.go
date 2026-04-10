@@ -23,9 +23,6 @@ type reservationUsecase struct {
 	reservationLockLogRepo postgresl.ReservationLockLogRepository
 }
 
-type lockArgKey = string
-type lockArgValue = string
-
 func NewReservationUsecase(reservationRepo postgresl.ReservationRepository, lockRepo redis.LockRepository, reservationLockLogRepo postgresl.ReservationLockLogRepository) ReservationUsecase {
 	return &reservationUsecase{reservationRepo, lockRepo, reservationLockLogRepo}
 }
@@ -80,6 +77,9 @@ func (u *reservationUsecase) ChangeReservation(ctx context.Context, req domain.C
 	if existing.Status != domain.ReservationConfirmed {
 		return nil, domain.ErrReservationNotEligible
 	}
+	if req.NewSeatID == existing.SeatID {
+		return nil, domain.ErrSeatUnchanged
+	}
 
 	var newReservation *domain.Reservation
 
@@ -119,8 +119,8 @@ func (u *reservationUsecase) ChangeReservation(ctx context.Context, req domain.C
 	}, nil
 }
 
-func buildLockArgs(showtimeID uuid.UUID, seatID uuid.UUID) (lockArgKey, lockArgValue) {
-	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s:", showtimeID, seatID)
+func buildLockArgs(showtimeID uuid.UUID, seatID uuid.UUID) (string, string) {
+	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s", showtimeID, seatID)
 	lockValue := uuid.NewString()
 	return lockKey, lockValue
 }
@@ -130,29 +130,29 @@ func (u *reservationUsecase) withSeatLock(ctx context.Context, showtimeID, seatI
 	// lock data in 10sec
 	acuired, err := u.lockRepo.AcquireLock(ctx, key, value, 10*time.Second)
 	if err != nil {
-		// failed acquire
-		_ = u.lockFailed(ctx, key, showtimeID, seatID)
+		// failed acquire lock
+		go u.lockFailedLog(context.Background(), key, showtimeID, seatID) // use background prevent request cancelled before create log
 		return err
 	}
 	if !acuired {
+		go u.lockFailedLog(context.Background(), key, showtimeID, seatID)
 		return domain.ErrLockNotAquired
 	}
 
-	// add lock aquired
-	_ = u.lockAquired(ctx, key, showtimeID, seatID)
+	// acquired then create log
+	go u.lockAquiredLog(context.Background(), key, showtimeID, seatID)
 
 	defer func() {
-		// release lock
+		// release lock complete then create log
 		if err := u.lockRepo.ReleaseLock(ctx, key, value); err == nil {
-			// add lock released
-			_ = u.lockReleased(ctx, key, showtimeID, seatID)
+			go u.lockReleasedLog(context.Background(), key, showtimeID, seatID)
 		}
 	}()
 
 	return fn()
 }
 
-func (u *reservationUsecase) lockAquired(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
+func (u *reservationUsecase) lockAquiredLog(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
 	now := time.Now()
 	return u.reservationLockLogRepo.Create(ctx, &domain.ReservationLockLog{
 		ID:         uuid.New(),
@@ -165,7 +165,7 @@ func (u *reservationUsecase) lockAquired(ctx context.Context, lockKey string, sh
 	})
 }
 
-func (u *reservationUsecase) lockFailed(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
+func (u *reservationUsecase) lockFailedLog(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
 	return u.reservationLockLogRepo.Create(ctx, &domain.ReservationLockLog{
 		ID:         uuid.New(),
 		ShowTimeID: showtimeID,
@@ -176,7 +176,7 @@ func (u *reservationUsecase) lockFailed(ctx context.Context, lockKey string, sho
 	})
 }
 
-func (u *reservationUsecase) lockReleased(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
+func (u *reservationUsecase) lockReleasedLog(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
 	now := time.Now()
 	return u.reservationLockLogRepo.Create(ctx, &domain.ReservationLockLog{
 		ID:         uuid.New(),
