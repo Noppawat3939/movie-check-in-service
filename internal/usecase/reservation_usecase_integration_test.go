@@ -75,6 +75,14 @@ func setupReverationTest(t *testing.T) *testDeps {
 	setupTestEnv(t)
 
 	db := setupTestDB(t)
+
+	tx := db.Begin()
+	assert.NoError(t, tx.Error)
+
+	t.Cleanup(func() {
+		tx.Rollback()
+	})
+
 	client := setupTestRedis(t)
 	reservationRepo := postgresl.NewReversationRepository(db)
 	lockLogRepo := postgresl.NewReservationLockLogRepository(db)
@@ -84,7 +92,7 @@ func setupReverationTest(t *testing.T) *testDeps {
 
 	return &testDeps{
 		ctx:             context.Background(),
-		db:              db,
+		db:              tx,
 		client:          client,
 		reservationRepo: reservationRepo,
 		lockRepo:        lockRepo,
@@ -262,5 +270,22 @@ func TestChangeReservation_ReservationNotFound(t *testing.T) {
 	resp, err := uc.ChangeReservation(deps.ctx, req)
 	assert.NotNil(t, err)
 	assert.ErrorIs(t, err, domain.ErrReservationNotFound)
+	assert.Nil(t, resp)
+}
+
+func TestChangeReservation_SeatUnchanged(t *testing.T) {
+	deps := setupReverationTest(t)
+
+	existingID := toUUID("37240853-0a4a-4006-8d3c-b201fd148fb0")
+	seatID := toUUID("c1000000-0000-0000-0000-000000000003")
+
+	req := domain.ChangeReservationRequest{
+		ReservationID: existingID,
+		NewSeatID:     seatID, // same seat
+	}
+
+	resp, err := deps.usecase.ChangeReservation(deps.ctx, req)
+
+	assert.ErrorIs(t, err, domain.ErrSeatUnchanged)
 	assert.Nil(t, resp)
 }
