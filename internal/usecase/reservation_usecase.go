@@ -131,7 +131,7 @@ func (u *reservationUsecase) withSeatLock(ctx context.Context, showtimeID, seatI
 	acuired, err := u.lockRepo.AcquireLock(ctx, key, value, 10*time.Second)
 	if err != nil {
 		// failed acquire lock
-		go u.lockFailedLog(context.Background(), key, showtimeID, seatID) // use background prevent request cancelled before create log
+		go u.lockFailedLog(context.Background(), key, showtimeID, seatID) // use background prevent request cancelled before goroutine done
 		return err
 	}
 	if !acuired {
