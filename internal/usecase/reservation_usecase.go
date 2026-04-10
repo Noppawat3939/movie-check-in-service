@@ -12,68 +12,63 @@ import (
 )
 
 type ReservationUsecase interface {
-	CreateReservation(ctx context.Context, req domain.CreateReservationRequest) (*domain.CreateReservationResponse, error)
 	ListReservation(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error)
+	CreateReservation(ctx context.Context, req domain.CreateReservationRequest) (*domain.CreateReservationResponse, error)
 	ChangeReservation(ctx context.Context, req domain.ChangeReservationRequest) (*domain.CreateReservationResponse, error)
 }
 
 type reservationUsecase struct {
-	reservationRepo postgresl.ReservationRepository
-	lockRepo        redis.LockRepository
+	reservationRepo        postgresl.ReservationRepository
+	lockRepo               redis.LockRepository
+	reservationLockLogRepo postgresl.ReservationLockLogRepository
 }
 
-func NewReservationUsecase(reservationRepo postgresl.ReservationRepository, lockRepo redis.LockRepository) ReservationUsecase {
-	return &reservationUsecase{reservationRepo, lockRepo}
+type lockArgKey = string
+type lockArgValue = string
+
+func NewReservationUsecase(reservationRepo postgresl.ReservationRepository, lockRepo redis.LockRepository, reservationLockLogRepo postgresl.ReservationLockLogRepository) ReservationUsecase {
+	return &reservationUsecase{reservationRepo, lockRepo, reservationLockLogRepo}
+}
+
+func (u *reservationUsecase) ListReservation(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error) {
+	return u.reservationRepo.ListReservationByShowtimeID(ctx, showtimeID)
 }
 
 func (u *reservationUsecase) CreateReservation(ctx context.Context, req domain.CreateReservationRequest) (*domain.CreateReservationResponse, error) {
+	var reservation *domain.Reservation
 	// prevent concurrency requests to reserve same showtime and seat
-	lockKey, lockValue := buildLockArgs(req.ShowTimeID, req.SeatID)
-	acquired, err := u.lockRepo.AcquireLock(ctx, lockKey, lockValue, 10*time.Second)
+	err := u.withSeatLock(ctx, req.ShowTimeID, req.SeatID, func() error {
+		// ensure has 1 request below processes
+		count, err := u.reservationRepo.CountByShowTimeAndSeat(ctx, req.ShowTimeID, req.SeatID)
+		if err != nil {
+			return err
+		}
+		if count > 0 {
+			return domain.ErrSeatAlreadyReserved
+		}
+
+		reservation = &domain.Reservation{
+			ID:         uuid.New(),
+			ShowTimeID: req.ShowTimeID,
+			SeatID:     req.SeatID,
+			Status:     domain.ReservationConfirmed,
+			ReservedAt: time.Now(),
+		}
+
+		return u.reservationRepo.Create(ctx, reservation)
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	if !acquired {
-		return nil, domain.ErrLockNotAquired
-	}
-	// clear lock
-	defer u.lockRepo.ReleaseLock(ctx, lockKey, lockValue)
 
-	// ensure has 1 request below processes
-	count, err := u.reservationRepo.CountByShowTimeAndSeat(ctx, req.ShowTimeID, req.SeatID)
-	if err != nil {
-		return nil, err
-	}
-
-	if count > 0 {
-		return nil, domain.ErrSeatAlreadyReserved
-	}
-
-	reservation := &domain.Reservation{
-		ID:         uuid.New(),
-		ShowTimeID: req.ShowTimeID,
-		SeatID:     req.SeatID,
-		Status:     domain.ReservationConfirmed,
-		ReservedAt: time.Now(),
-	}
-
-	if err := u.reservationRepo.Create(ctx, reservation); err != nil {
-		return nil, err
-	}
-
-	resp := &domain.CreateReservationResponse{
+	return &domain.CreateReservationResponse{
 		ID:         reservation.ID,
 		ShowtimeID: reservation.ShowTimeID,
 		SeatID:     reservation.SeatID,
 		Status:     reservation.Status,
 		ReservedAt: reservation.ReservedAt,
-	}
-
-	return resp, nil
-}
-
-func (u *reservationUsecase) ListReservation(ctx context.Context, showtimeID uuid.UUID) ([]domain.Reservation, error) {
-	return u.reservationRepo.ListReservationByShowtimeID(ctx, showtimeID)
+	}, nil
 }
 
 func (u *reservationUsecase) ChangeReservation(ctx context.Context, req domain.ChangeReservationRequest) (*domain.CreateReservationResponse, error) {
@@ -86,53 +81,110 @@ func (u *reservationUsecase) ChangeReservation(ctx context.Context, req domain.C
 		return nil, domain.ErrReservationNotEligible
 	}
 
-	// lock new seat
-	lockKey, lockValue := buildLockArgs(existing.ShowTimeID, req.NewSeatID)
-	acquired, err := u.lockRepo.AcquireLock(ctx, lockKey, lockValue, 10*time.Second)
+	var newReservation *domain.Reservation
+
+	err = u.withSeatLock(ctx, existing.ShowTimeID, req.NewSeatID, func() error {
+		// check new seat available
+		count, err := u.reservationRepo.CountByShowTimeAndSeat(ctx, existing.ShowTimeID, req.NewSeatID)
+		if err != nil {
+			return err
+		}
+
+		if count > 0 {
+			return domain.ErrSeatAlreadyReserved
+		}
+
+		// cancel old and create new seat
+		newReservation = &domain.Reservation{
+			ID:         uuid.New(),
+			ShowTimeID: existing.ShowTimeID,
+			SeatID:     req.NewSeatID,
+			Status:     domain.ReservationConfirmed,
+			ReservedAt: time.Now(),
+		}
+
+		return u.reservationRepo.CancelAndCreate(ctx, req.ReservationID, newReservation)
+
+	})
 	if err != nil {
 		return nil, err
 	}
-	if !acquired {
-		return nil, domain.ErrLockNotAquired
-	}
-	defer u.lockRepo.ReleaseLock(ctx, lockKey, lockValue)
 
-	// check new seat available
-	count, err := u.reservationRepo.CountByShowTimeAndSeat(ctx, existing.ShowTimeID, req.NewSeatID)
-	if err != nil {
-		return nil, err
-	}
-
-	if count > 0 {
-		return nil, domain.ErrSeatAlreadyReserved
-	}
-
-	// cancel old and create new seat
-	newReservation := &domain.Reservation{
-		ID:         uuid.New(),
-		ShowTimeID: existing.ShowTimeID,
-		SeatID:     req.NewSeatID,
-		Status:     domain.ReservationConfirmed,
-		ReservedAt: time.Now(),
-	}
-
-	if err := u.reservationRepo.CancelAndCreate(ctx, req.ReservationID, newReservation); err != nil {
-		return nil, err
-	}
-
-	resp := &domain.CreateReservationResponse{
+	return &domain.CreateReservationResponse{
 		ID:         newReservation.ID,
 		ShowtimeID: newReservation.ShowTimeID,
 		SeatID:     newReservation.SeatID,
 		Status:     newReservation.Status,
 		ReservedAt: newReservation.ReservedAt,
-	}
-
-	return resp, nil
+	}, nil
 }
 
-func buildLockArgs(showtimeID uuid.UUID, seatID uuid.UUID) (string, string) {
+func buildLockArgs(showtimeID uuid.UUID, seatID uuid.UUID) (lockArgKey, lockArgValue) {
 	lockKey := fmt.Sprintf("lock:showtime:%s:seat:%s:", showtimeID, seatID)
 	lockValue := uuid.NewString()
 	return lockKey, lockValue
+}
+
+func (u *reservationUsecase) withSeatLock(ctx context.Context, showtimeID, seatID uuid.UUID, fn func() error) error {
+	key, value := buildLockArgs(showtimeID, seatID)
+	// lock data in 10sec
+	acuired, err := u.lockRepo.AcquireLock(ctx, key, value, 10*time.Second)
+	if err != nil {
+		// failed acquire
+		_ = u.lockFailed(ctx, key, showtimeID, seatID)
+		return err
+	}
+	if !acuired {
+		return domain.ErrLockNotAquired
+	}
+
+	// add lock aquired
+	_ = u.lockAquired(ctx, key, showtimeID, seatID)
+
+	defer func() {
+		// release lock
+		if err := u.lockRepo.ReleaseLock(ctx, key, value); err == nil {
+			// add lock released
+			_ = u.lockReleased(ctx, key, showtimeID, seatID)
+		}
+	}()
+
+	return fn()
+}
+
+func (u *reservationUsecase) lockAquired(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
+	now := time.Now()
+	return u.reservationLockLogRepo.Create(ctx, &domain.ReservationLockLog{
+		ID:         uuid.New(),
+		ShowTimeID: showtimeID,
+		SeatID:     seatID,
+		LockKey:    lockKey,
+		Status:     domain.LockStatusAquired,
+		AquiredAt:  now,
+		CreatedAt:  now,
+	})
+}
+
+func (u *reservationUsecase) lockFailed(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
+	return u.reservationLockLogRepo.Create(ctx, &domain.ReservationLockLog{
+		ID:         uuid.New(),
+		ShowTimeID: showtimeID,
+		SeatID:     seatID,
+		LockKey:    lockKey,
+		Status:     domain.LockStatusFailed,
+		CreatedAt:  time.Now(),
+	})
+}
+
+func (u *reservationUsecase) lockReleased(ctx context.Context, lockKey string, showtimeID, seatID uuid.UUID) error {
+	now := time.Now()
+	return u.reservationLockLogRepo.Create(ctx, &domain.ReservationLockLog{
+		ID:         uuid.New(),
+		ShowTimeID: showtimeID,
+		SeatID:     seatID,
+		LockKey:    lockKey,
+		Status:     domain.LockStatusReleased,
+		ReleasedAt: now,
+		CreatedAt:  now,
+	})
 }

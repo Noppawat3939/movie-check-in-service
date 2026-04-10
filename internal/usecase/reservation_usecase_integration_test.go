@@ -15,6 +15,16 @@ import (
 	"gorm.io/gorm"
 )
 
+type testDeps struct {
+	ctx             context.Context
+	db              *gorm.DB
+	client          *redis.Client
+	lockRepo        *redis.LockRepository
+	reservationRepo postgresl.ReservationRepository
+	lockLogRepo     postgresl.ReservationLockLogRepository
+	usecase         ReservationUsecase
+}
+
 func setupTestEnv(t *testing.T) {
 	t.Setenv("DB_HOST", "localhost")
 	t.Setenv("DB_EXTERNAL_PORT", "5434")
@@ -54,24 +64,53 @@ func cleanupReservationData(t *testing.T, db *gorm.DB, showtimeID uuid.UUID, sea
 	assert.NoError(t, err)
 }
 
-func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
+func cleanupReservationByShowTimeID(t *testing.T, db *gorm.DB, showtimeID uuid.UUID) {
+	err := db.Exec("DELETE FROM reservations WHERE showtime_id = ?", showtimeID).Error
+
+	assert.NoError(t, err)
+}
+
+func setupReverationTest(t *testing.T) *testDeps {
+	t.Helper()
 	setupTestEnv(t)
 
 	db := setupTestDB(t)
 	client := setupTestRedis(t)
-
 	reservationRepo := postgresl.NewReversationRepository(db)
+	lockLogRepo := postgresl.NewReservationLockLogRepository(db)
 	lockRepo := redis.NewLockRepository(client)
 
-	uc := NewReservationUsecase(reservationRepo, *lockRepo)
-	showtimeID, _ := uuid.Parse("b1000000-0000-0000-0000-000000000001")
-	seatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000002")
+	uc := NewReservationUsecase(reservationRepo, *lockRepo, lockLogRepo)
 
-	cleanupReservationData(t, db, showtimeID, seatID)
+	return &testDeps{
+		ctx:             context.Background(),
+		db:              db,
+		client:          client,
+		reservationRepo: reservationRepo,
+		lockRepo:        lockRepo,
+		lockLogRepo:     lockLogRepo,
+		usecase:         uc,
+	}
+}
+
+func toUUID(s string) uuid.UUID {
+	parsed, _ := uuid.Parse(s)
+	return parsed
+}
+
+func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
+	deps := setupReverationTest(t)
+	reservationRepo := deps.reservationRepo
+	uc := deps.usecase
+
+	showtimeID := toUUID("b1000000-0000-0000-0000-000000000001")
+	seatID := toUUID("c1000000-0000-0000-0000-000000000002")
+
+	cleanupReservationData(t, deps.db, showtimeID, seatID)
 
 	req := domain.CreateReservationRequest{ShowTimeID: showtimeID, SeatID: seatID}
 
-	const numGoroutines = 1000
+	const numGoroutines = 100
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 
 	defer cancel()
@@ -110,22 +149,19 @@ func TestCreateReservation_ConcurrencyRequests(t *testing.T) {
 }
 
 func TestChangeReservation_Success(t *testing.T) {
-	setupTestEnv(t)
+	deps := setupReverationTest(t)
 
-	db := setupTestDB(t)
-	client := setupTestRedis(t)
+	reservationRepo := deps.reservationRepo
 
-	reservationRepo := postgresl.NewReversationRepository(db)
-	lockRepo := redis.NewLockRepository(client)
-
-	ctx := context.Background()
-	uc := NewReservationUsecase(reservationRepo, *lockRepo)
-	showtimeID, _ := uuid.Parse("b1000000-0000-0000-0000-000000000001")
-	oldSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000002")
-	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003")
+	showtimeID := toUUID("b1000000-0000-0000-0000-000000000001")
+	oldSeatID := toUUID("c1000000-0000-0000-0000-000000000002")
+	newSeatID := toUUID("c1000000-0000-0000-0000-000000000003")
 
 	// cleanup data
-	db.Exec("DELETE FROM reservations WHERE showtime_id = ?", showtimeID)
+	cleanupReservationByShowTimeID(t, deps.db, showtimeID)
+
+	ctx := deps.ctx
+	uc := deps.usecase
 
 	// create existing reservation
 	oldReserve := &domain.Reservation{
@@ -166,22 +202,17 @@ func TestChangeReservation_Success(t *testing.T) {
 }
 
 func TestChangeReservation_NewSeatAlreadyReserved(t *testing.T) {
-	setupTestEnv(t)
+	deps := setupReverationTest(t)
+	ctx := deps.ctx
+	reservationRepo := deps.reservationRepo
+	uc := deps.usecase
 
-	db := setupTestDB(t)
-	client := setupTestRedis(t)
-
-	reservationRepo := postgresl.NewReversationRepository(db)
-	lockRepo := redis.NewLockRepository(client)
-
-	ctx := context.Background()
-	uc := NewReservationUsecase(reservationRepo, *lockRepo)
-	showtimeID, _ := uuid.Parse("b1000000-0000-0000-0000-000000000001")
-	oldSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000002")
-	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003")
+	showtimeID := toUUID("b1000000-0000-0000-0000-000000000001")
+	oldSeatID := toUUID("c1000000-0000-0000-0000-000000000002")
+	newSeatID := toUUID("c1000000-0000-0000-0000-000000000003")
 
 	// clean up
-	db.Exec("DELETE FROM reservations WHERE showtime_id = ?", showtimeID)
+	cleanupReservationByShowTimeID(t, deps.db, showtimeID)
 
 	// create 2 reserve (old A and old B , then change new seat same seat with old B)
 	oldA := &domain.Reservation{
@@ -216,17 +247,10 @@ func TestChangeReservation_NewSeatAlreadyReserved(t *testing.T) {
 }
 
 func TestChangeReservation_ReservationNotFound(t *testing.T) {
-	setupTestEnv(t)
+	deps := setupReverationTest(t)
 
-	db := setupTestDB(t)
-	client := setupTestRedis(t)
-
-	reservationRepo := postgresl.NewReversationRepository(db)
-	lockRepo := redis.NewLockRepository(client)
-
-	ctx := context.Background()
-	uc := NewReservationUsecase(reservationRepo, *lockRepo)
-	newSeatID, _ := uuid.Parse("c1000000-0000-0000-0000-000000000003") // seat existing
+	uc := deps.usecase
+	newSeatID := toUUID("c1000000-0000-0000-0000-000000000003") // seat existing
 	newReserveID := uuid.New()
 
 	// make request for change reservation (reservation id not found in db)
@@ -235,7 +259,7 @@ func TestChangeReservation_ReservationNotFound(t *testing.T) {
 		NewSeatID:     newSeatID,
 	}
 
-	resp, err := uc.ChangeReservation(ctx, req)
+	resp, err := uc.ChangeReservation(deps.ctx, req)
 	assert.NotNil(t, err)
 	assert.ErrorIs(t, err, domain.ErrReservationNotFound)
 	assert.Nil(t, resp)

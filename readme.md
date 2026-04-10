@@ -145,8 +145,6 @@ root/
 │   └── delivery/
 │       └── http/
 │           ├── router.go                  # register all routes
-│           ├── middleware/
-│           │   └── error_handler.go       # central error → HTTP response
 │           └── handler/
 │               └── domain_handler.go
 │

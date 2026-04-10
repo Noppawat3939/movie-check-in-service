@@ -18,7 +18,8 @@ func NewRouter(db *gorm.DB) *gin.Engine {
 	client, _ := redis.NewClient()
 	lockRepo := redis.NewLockRepository(client)
 	reservationRepo := postgresl.NewReversationRepository(db)
-	reservationUsecase := usecase.NewReservationUsecase(reservationRepo, *lockRepo)
+	lockLogRepo := postgresl.NewReservationLockLogRepository(db)
+	reservationUsecase := usecase.NewReservationUsecase(reservationRepo, *lockRepo, lockLogRepo)
 	reservationHandler := handler.NewReservationHandler(reservationUsecase)
 
 	movieRepo := postgresl.NewMovieRepository(db)
