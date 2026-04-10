@@ -101,21 +101,11 @@ This rule must be guaranteed at the database level to prevent race conditions in
 
 ---
 
-##### 5. Payment
-
-Payment is currently out of scope for this version.
-
-The focus of this project is:
-
-> consistency and prevention of duplicate seat reservations
-
----
-
 ### Stacks
 
 - **Language:** Go
 - **Framework:** Gin
-- **Database:** PostgreSQL
+- **Database & Cache:** PostgreSQL, Redis
 - **Containerization:** Docker
 - **Architecture:** Clean Architecture
 
