@@ -24,7 +24,7 @@ func (h *ReservationHandler) CreateReservation(c *gin.Context) {
 	var req domain.CreateReservationRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, domain.ErrBodyInvalidMsg)
+		response.Error(c, http.StatusBadRequest, domain.ErrBodyInvalid.Error())
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *ReservationHandler) ChangeReservation(c *gin.Context) {
 
 	if err != nil {
 		fmt.Println("failed parse reservation id %w", err)
-		response.Error(c, http.StatusBadRequest, domain.ErrBodyInvalidMsg)
+		response.Error(c, http.StatusBadRequest, domain.ErrBodyInvalid.Error())
 		return
 	}
 
@@ -75,7 +75,7 @@ func (h *ReservationHandler) ChangeReservation(c *gin.Context) {
 	req.ReservationID = reservationID
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, http.StatusBadRequest, domain.ErrBodyInvalidMsg)
+		response.Error(c, http.StatusBadRequest, domain.ErrBodyInvalid.Error())
 		return
 	}
 
